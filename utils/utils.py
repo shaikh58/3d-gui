@@ -133,9 +133,9 @@ def undistort_points(distorted_points, cam_calib_data) -> np.ndarray:
 
     return undistorted_points
 
-def compute_global_coordinate_frame(calib_data_path, imgs, annotations_path):
-    """Takes in calibration toml path, list of images with their corresponding 
-    ground/origin/wall annotations in a dataframe, and returns the global reference frame.
+def compute_global_coordinate_frame(calib_data_path, annotations_path):
+    """Takes in calibration toml path, and ground/origin/wall annotations 
+    in a csv file, and returns the global reference frame.
     Assumes point type 1=ground, 2=origin, 3=wall.
     """
     # load calibration data
