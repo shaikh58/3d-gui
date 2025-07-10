@@ -193,5 +193,26 @@ def compute_global_coordinate_frame(calib_data_path, annotations_path):
     R = np.stack((x_axis, y_axis, z_axis), axis=1)
     t = pts_3d[-2] # 2nd last point is the origin
     T = np.hstack((R, t.reshape(3, 1)))
+    T = np.vstack([T, np.zeros((1, 4))])
+    T[-1, -1] = 1
     
     return T
+
+def register_to_global_frame(targets, T):
+    """Takes in 3D keypoints of shape (N, K, 15, 3) and the global transformation matrix T,
+    and returns the keypoints in the global frame of shape (N, K, 15, 3).
+    """
+    targets_h = np.concatenate([targets, np.ones((*targets.shape[:-1],1))], axis=-1)
+    T_inv = invert_T(T)
+    targets_h_global = np.einsum('ij,abcj->abci', T_inv, targets_h)
+    targets_global = targets_h_global[..., :3]
+    return targets_global
+
+def invert_T(T):
+    """Takes in a 4x4 transformation matrix T, and returns the inverse of T.
+    """
+    T_inv = np.zeros((4,4))
+    T_inv[:3,:3] = T[:3,:3].T
+    T_inv[:3,3] = -T[:3,:3].T @ T[:3,3]
+    T_inv[3,3] = 1
+    return T_inv
