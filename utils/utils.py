@@ -181,7 +181,6 @@ def compute_global_coordinate_frame(calib_data_path, annotations_path):
     # Get the ground and wall planes
     # ground - all points except last (wall)
     z_axis = fit_plane(pts_3d[:-1]) # normalized 
-    # wall points z value seem to be smaller than ground points
     y_axis = fit_plane(pts_3d[-2:]) # normalized
     # form orthonormal basis
     y_axis = y_axis - np.dot(y_axis, z_axis) * z_axis
@@ -198,6 +197,15 @@ def compute_global_coordinate_frame(calib_data_path, annotations_path):
     
     return T
 
+def invert_T(T):
+    """Takes in a 4x4 transformation matrix T, and returns the inverse of T.
+    """
+    T_inv = np.zeros((4,4))
+    T_inv[:3,:3] = T[:3,:3].T
+    T_inv[:3,3] = -T[:3,:3].T @ T[:3,3]
+    T_inv[3,3] = 1
+    return T_inv
+
 def register_to_global_frame(targets, T):
     """Takes in 3D keypoints of shape (N, K, 15, 3) and the global transformation matrix T,
     and returns the keypoints in the global frame of shape (N, K, 15, 3).
@@ -207,12 +215,3 @@ def register_to_global_frame(targets, T):
     targets_h_global = np.einsum('ij,abcj->abci', T_inv, targets_h)
     targets_global = targets_h_global[..., :3]
     return targets_global
-
-def invert_T(T):
-    """Takes in a 4x4 transformation matrix T, and returns the inverse of T.
-    """
-    T_inv = np.zeros((4,4))
-    T_inv[:3,:3] = T[:3,:3].T
-    T_inv[:3,3] = -T[:3,:3].T @ T[:3,3]
-    T_inv[3,3] = 1
-    return T_inv

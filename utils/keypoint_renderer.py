@@ -3,10 +3,12 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import cv2
 import matplotlib.cm as cm
+import io
+from PIL import Image
 
 class KeypointRenderer:
     """
-    A class to render keypoints connected by edges to form a mouse outline.
+    A class to render keypoints connected by edges to form an instance outline.
     Supports both 2D and 3D visualization with customizable styling.
     """
     
@@ -38,7 +40,12 @@ class KeypointRenderer:
         self.fig = None
         self.ax = None
         self.plot_objects = {}  # Store plot objects for updating
-
+        
+        # Video recording attributes
+        self.frames_buffer = []
+        self.recording = False
+        self.video_writer = None
+        self.fps = 30
 
     def set_style(self, node_color=None, edge_color=None, node_size=None, 
                   edge_width=None, alpha=None, axis_length=None, axis_width=None):
@@ -58,6 +65,122 @@ class KeypointRenderer:
         if axis_width is not None:
             self.axis_width = axis_width
 
+    def start_recording(self, fps=30):
+        """
+        Start recording frames to buffer for video creation.
+        
+        Args:
+            fps: frames per second for the output video
+        """
+        self.frames_buffer = []
+        self.recording = True
+        self.fps = fps
+        print(f"Started recording at {fps} FPS")
+
+    def stop_recording(self):
+        """Stop recording frames."""
+        self.recording = False
+        print(f"Stopped recording. Captured {len(self.frames_buffer)} frames")
+
+    def capture_frame(self):
+        """
+        Capture the current figure as a frame and add to buffer if recording.
+        """
+        if not self.recording or self.fig is None:
+            return
+        
+        # Convert matplotlib figure to image
+        buf = io.BytesIO()
+        self.fig.savefig(buf, format='png', dpi=100, bbox_inches='tight', 
+                        facecolor='white', edgecolor='none')
+        buf.seek(0)
+        
+        # Convert to PIL Image and then to numpy array
+        img = Image.open(buf)
+        img_array = np.array(img)
+        
+        # Convert RGBA to BGR (OpenCV format)
+        if img_array.shape[2] == 4:  # RGBA
+            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+        else:  # RGB
+            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+        
+        self.frames_buffer.append(img_bgr)
+        buf.close()
+
+    def save_video(self, output_path, fps=None):
+        """
+        Save the recorded frames as an MP4 video.
+        
+        Args:
+            output_path: path where to save the video file
+            fps: frames per second (uses recording fps if not specified)
+        """
+        if not self.frames_buffer:
+            print("No frames recorded. Call start_recording() and capture frames first.")
+            return
+        
+        if fps is None:
+            fps = self.fps
+        
+        # Get frame dimensions from the first frame
+        height, width = self.frames_buffer[0].shape[:2]
+        
+        # Initialize video writer
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        self.video_writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        
+        # Write frames
+        for i, frame in enumerate(self.frames_buffer):
+            self.video_writer.write(frame)
+            if (i + 1) % 10 == 0:  # Progress indicator
+                print(f"Writing frame {i + 1}/{len(self.frames_buffer)}")
+        
+        # Release video writer
+        self.video_writer.release()
+        print(f"Video saved to: {output_path}")
+        print(f"Video details: {len(self.frames_buffer)} frames, {fps} FPS, {width}x{height}")
+
+    def create_animation(self, output_path, fps=30, show_labels=False, 
+                        show_coordinate_axes=True, show_progress=True):
+        """
+        Create and save an animation of all frames automatically.
+        
+        Args:
+            output_path: path where to save the video file
+            fps: frames per second for the output video
+            show_labels: whether to show keypoint labels
+            show_coordinate_axes: whether to show coordinate axes
+            show_progress: whether to show progress during rendering
+        """
+        # Start recording
+        self.start_recording(fps)
+        
+        # Create the initial plot
+        self.create_3d_plot()
+        
+        # Get total number of frames
+        total_frames = self.keypoints.shape[0]
+        
+        # Render each frame
+        for frame_idx in range(total_frames):
+            if show_progress and frame_idx % 10 == 0:
+                print(f"Rendering frame {frame_idx + 1}/{total_frames}")
+            
+            # Update the plot
+            self.update_3d_plot(frame_idx, show_labels, show_coordinate_axes)
+            
+            # Capture the frame
+            self.capture_frame()
+        
+        # Stop recording and save video
+        self.stop_recording()
+        self.save_video(output_path, fps)
+        
+        # Clear buffer to free memory
+        self.frames_buffer = []
+
+    # ... existing methods remain the same ...
     def draw_coordinate_axes(self):
         """
         Draw coordinate axes for a given transformation matrix.
@@ -98,7 +221,7 @@ class KeypointRenderer:
 
     
     def create_3d_plot(self, figsize=(12, 10), show_labels=False, show_grid=False,
-                       title="Mouse Keypoint Skeleton (3D)", view_elev=20, view_azim=45):
+                       title=None, view_elev=20, view_azim=45):
         """
         Create a 3D plot with axes and styling. Call this once before rendering multiple frames.
         
@@ -135,7 +258,6 @@ class KeypointRenderer:
         # Set up styling
         if show_grid:
             self.ax.grid(True, alpha=0.3)
-        self.ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
         self.ax.set_xlabel('X', fontsize=12)
         self.ax.set_ylabel('Y', fontsize=12)
         self.ax.set_zlabel('Z', fontsize=12)
@@ -179,11 +301,11 @@ class KeypointRenderer:
         # Get the number of mice in this frame
         num_instances = self.keypoints.shape[1]
         
-        # Plot each mouse
+        # Plot each instance
         for inst_idx in range(num_instances):
-            mouse_color = self.plot_objects['colors'][inst_idx]
+            instance_color = self.plot_objects['colors'][inst_idx]
             
-            # Plot edges (lines connecting keypoints) for this mouse
+            # Plot edges (lines connecting keypoints) for this instance
             for edge in self.edges:
                 start_idx, end_idx = edge
                 start_point = self.keypoints[frame_idx, inst_idx, start_idx]
@@ -192,15 +314,15 @@ class KeypointRenderer:
                 self.ax.plot([start_point[0], end_point[0]], 
                            [start_point[1], end_point[1]], 
                            [start_point[2], end_point[2]], 
-                           color=mouse_color, linewidth=self.edge_width, 
+                           color=instance_color, linewidth=self.edge_width, 
                            alpha=self.alpha)
             
-            # Plot keypoints (nodes) for this mouse
+            # Plot keypoints (nodes) for this instance
             self.ax.scatter(self.keypoints[frame_idx, inst_idx, :, 0], 
                           self.keypoints[frame_idx, inst_idx, :, 1], 
                           self.keypoints[frame_idx, inst_idx, :, 2],
-                          c=mouse_color, s=self.node_size, alpha=self.alpha, 
-                          edgecolors='white', linewidth=2, label=f'Mouse {inst_idx + 1}')
+                          c=instance_color, s=self.node_size, alpha=self.alpha, 
+                          edgecolors='white', linewidth=2, label=f'Instance {inst_idx + 1}')
             
             # Add labels if requested
             if show_labels:
