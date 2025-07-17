@@ -5,6 +5,7 @@ import cv2
 import matplotlib.cm as cm
 import io
 from PIL import Image
+from IPython.display import clear_output, display
 
 class KeypointRenderer:
     """
@@ -91,7 +92,7 @@ class KeypointRenderer:
         
         # Convert matplotlib figure to image
         buf = io.BytesIO()
-        self.fig.savefig(buf, format='png', dpi=100, bbox_inches='tight', 
+        self.fig.savefig(buf, format='png', dpi=75, bbox_inches='tight', 
                         facecolor='white', edgecolor='none')
         buf.seek(0)
         
@@ -133,8 +134,8 @@ class KeypointRenderer:
         # Write frames
         for i, frame in enumerate(self.frames_buffer):
             self.video_writer.write(frame)
-            if (i + 1) % 10 == 0:  # Progress indicator
-                print(f"Writing frame {i + 1}/{len(self.frames_buffer)}")
+            # if (i + 1) % 10 == 0:  # Progress indicator
+            #     print(f"Writing frame {i + 1}/{len(self.frames_buffer)}")
         
         # Release video writer
         self.video_writer.release()
@@ -164,8 +165,6 @@ class KeypointRenderer:
         
         # Render each frame
         for frame_idx in range(total_frames):
-            if show_progress and frame_idx % 10 == 0:
-                print(f"Rendering frame {frame_idx + 1}/{total_frames}")
             
             # Update the plot
             self.update_3d_plot(frame_idx, show_labels, show_coordinate_axes)
@@ -220,7 +219,7 @@ class KeypointRenderer:
         self.ax.scatter([z_world[0]], [z_world[1]], [z_world[2]], color='blue', s=30, alpha=self.alpha)
 
     
-    def create_3d_plot(self, figsize=(12, 10), show_labels=False, show_grid=False,
+    def create_3d_plot(self, figsize=(10,8), show_labels=False, show_grid=False,
                        title=None, view_elev=20, view_azim=45):
         """
         Create a 3D plot with axes and styling. Call this once before rendering multiple frames.
@@ -356,12 +355,11 @@ class KeypointRenderer:
         # Force redraw - multiple methods to ensure update in notebooks
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
-        plt.pause(0.01)  # Small pause to allow the plot to update
+        plt.pause(0.001)  # Small pause to allow the plot to update
         
         # Alternative method for notebook compatibility
-        try:
-            from IPython.display import clear_output, display
-            clear_output(wait=True)
-            display(self.fig)
-        except ImportError:
-            pass  # Not in a notebook environment
+        # try:
+        #     clear_output(wait=True)
+        #     display(self.fig)
+        # except ImportError:
+        #     pass  # Not in a notebook environment

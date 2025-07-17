@@ -2,6 +2,7 @@ import numpy as np
 import toml
 import pandas as pd
 import cv2
+from pathlib import Path
 
 def fit_plane(points):
     centroid = points.mean(axis=0)
@@ -111,6 +112,21 @@ def load_annotations(file_path):
     df['video'] = df['video'].str.split(".").str[0]
     return df
 
+
+def process_raw_annotations(annotations):
+    id_type_map = {
+        1: "ground",
+        2: "origin",
+        3: "wall"
+    }
+    annotations['type'] = annotations['point_type'].map(id_type_map)
+    annotations['frame'] = annotations['frame'].astype(int)
+    annotations['x'] = annotations['x'].astype(float)
+    annotations['y'] = annotations['y'].astype(float)
+    annotations['video'] = annotations['video'].str.split(".").str[0]
+    return annotations
+
+
 def map_vid_cam_data(calib_data, annotations_df):
     dict_vid_cam_data = {}
     for vid_name in annotations_df["video"].unique():
@@ -133,15 +149,18 @@ def undistort_points(distorted_points, cam_calib_data) -> np.ndarray:
 
     return undistorted_points
 
-def compute_global_coordinate_frame(calib_data_path, annotations_path):
-    """Takes in calibration toml path, and ground/origin/wall annotations 
-    in a csv file, and returns the global reference frame.
+def compute_global_coordinate_frame(calib_data, annotations):
+    """Takes in calibration toml, and ground/origin/wall annotations
+    in csv or dataframe format, and returns the global reference frame.
     Assumes point type 1=ground, 2=origin, 3=wall.
     """
-    # load calibration data
-    calib_data = load_calibration_data(calib_data_path)
     # load annotated points on global reference frame
-    annotations_df = load_annotations(annotations_path)
+    # if its a path, load it from the csv file
+    if isinstance(annotations, str) and Path(annotations).exists():
+        annotations_df = load_annotations(annotations)
+    # if its a dataframe, process it
+    else:
+        annotations_df = process_raw_annotations(annotations)
     # map from video name in annotations, to cam calibration data
     dict_vid_calib_data = map_vid_cam_data(calib_data, annotations_df)
 
@@ -185,7 +204,7 @@ def compute_global_coordinate_frame(calib_data_path, annotations_path):
     # form orthonormal basis
     y_axis = y_axis - np.dot(y_axis, z_axis) * z_axis
     # flip axis so that it matches +ve unit axis convention
-    y_axis = - y_axis / np.linalg.norm(y_axis)
+    # y_axis = - y_axis / np.linalg.norm(y_axis)
     # Cross product to get the 3rd coordinate axis
     x_axis = np.cross(y_axis, z_axis)
     # form rotation matrix; each col is an axis of the global coordinate frame
@@ -215,3 +234,6 @@ def register_to_global_frame(targets, T):
     targets_h_global = np.einsum('ij,abcj->abci', T_inv, targets_h)
     targets_global = targets_h_global[..., :3]
     return targets_global
+
+
+    
