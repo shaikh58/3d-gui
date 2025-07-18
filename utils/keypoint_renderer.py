@@ -5,7 +5,7 @@ import cv2
 import matplotlib.cm as cm
 import io
 from PIL import Image
-from IPython.display import clear_output, display
+# from IPython.display import clear_output, display
 
 class KeypointRenderer:
     """
@@ -334,9 +334,9 @@ class KeypointRenderer:
             self.draw_coordinate_axes()
         
         # Set plot limits to the minimum and maximum values without padding (ignoring NaN)
-        x_min, x_max = min(np.nanmin(self.keypoints[:, :, :, 0]), 0), max(np.nanmax(self.keypoints[:, :, :, 0]), self.T[0,3])
-        y_min, y_max = min(np.nanmin(self.keypoints[:, :, :, 1]), 0), max(np.nanmax(self.keypoints[:, :, :, 1]), self.T[1,3])
-        z_min, z_max = min(np.nanmin(self.keypoints[:, :, :, 2]), 0), max(np.nanmax(self.keypoints[:, :, :, 2]), self.T[2,3])
+        x_min, x_max = min(np.nanmin(self.keypoints[:, :, :, 0]), 0), max(np.nanmax(self.keypoints[:, :, :, 0]), 0)
+        y_min, y_max = min(np.nanmin(self.keypoints[:, :, :, 1]), 0), max(np.nanmax(self.keypoints[:, :, :, 1]), 0)
+        z_min, z_max = 0, max(np.nanmax(self.keypoints[:, :, :, 2]), 0)
         self.ax.set_xlim(x_min, x_max)
         self.ax.set_ylim(y_min, y_max)
         self.ax.set_zlim(z_min, z_max)

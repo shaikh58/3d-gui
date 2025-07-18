@@ -11,6 +11,7 @@ import numpy as np
 import utils.utils as utils
 from utils.keypoint_renderer import KeypointRenderer
 
+
 class VideoPanel(QWidget):
     def __init__(self, video_path, parent=None):
         super().__init__(parent)
@@ -150,11 +151,12 @@ class VideoClickApp(QWidget):
         self.loadCalibButton = QPushButton("Load Calibration")
         self.loadTargetsButton = QPushButton("Load Targets")
         self.loadClicksButton = QPushButton("Load Clicks")
+        self.loadSlpButton = QPushButton("Load SLP File")
         self.saveButton = QPushButton("Save Clicks")
         self.saveVideoButton = QPushButton("Save Video")
         self.registerButton = QPushButton("Register")
         self.renderButton = QPushButton("Render")
-        
+        self.trackButton = QPushButton("Track")
         # Point type selection
         self.pointTypeLabel = QLabel("Point Type:")
         self.groundButton = QPushButton("Ground")
@@ -169,17 +171,25 @@ class VideoClickApp(QWidget):
         control_layout.addWidget(self.loadCalibButton)
         control_layout.addWidget(self.loadTargetsButton)
         control_layout.addWidget(self.loadClicksButton)
-        control_layout.addWidget(self.pointTypeLabel)
-        control_layout.addWidget(self.groundButton)
-        control_layout.addWidget(self.originButton)
-        control_layout.addWidget(self.wallButton)
+        control_layout.addWidget(self.loadSlpButton)
         control_layout.addWidget(self.saveButton)
         control_layout.addWidget(self.saveVideoButton)
         control_layout.addWidget(self.registerButton)
         control_layout.addWidget(self.renderButton)
+        control_layout.addWidget(self.trackButton)
         control_layout.addStretch()
         
         self.layout.addLayout(control_layout)
+        
+        # Point type selection - separate line
+        point_type_layout = QHBoxLayout()
+        point_type_layout.addWidget(self.pointTypeLabel)
+        point_type_layout.addWidget(self.groundButton)
+        point_type_layout.addWidget(self.originButton)
+        point_type_layout.addWidget(self.wallButton)
+        point_type_layout.addStretch()
+        
+        self.layout.addLayout(point_type_layout)
         
         # Global frame navigation
         frame_nav_layout = QHBoxLayout()
@@ -209,6 +219,7 @@ class VideoClickApp(QWidget):
         self.loadCalibButton.clicked.connect(self.load_calibration)
         self.loadTargetsButton.clicked.connect(self.load_targets)
         self.loadClicksButton.clicked.connect(self.load_clicks)
+        self.loadSlpButton.clicked.connect(self.load_slp_file)
         self.saveButton.clicked.connect(self.save_clicks)
         self.saveVideoButton.clicked.connect(self.set_video_save_path)
         self.registerButton.clicked.connect(self.register)
@@ -218,7 +229,7 @@ class VideoClickApp(QWidget):
         self.groundButton.clicked.connect(lambda: self.set_point_type(1))
         self.originButton.clicked.connect(lambda: self.set_point_type(2))
         self.wallButton.clicked.connect(lambda: self.set_point_type(3))
-
+        self.trackButton.clicked.connect(self.track)
         self.video_files = []
         self.clicks = []
         self.video_panels = []
@@ -227,6 +238,7 @@ class VideoClickApp(QWidget):
         self.max_frames = 0
         
         # File paths and loaded data
+        
         self.video_save_path = None
         self.calibration_file = None
         self.targets = None
@@ -253,6 +265,9 @@ class VideoClickApp(QWidget):
         self.clicks_df = None
         self.clicks_user_input = False
         
+        # Store SLP file data
+        self.labels = None
+        
         # Set initial button states
         self.update_button_states()
 
@@ -273,6 +288,11 @@ class VideoClickApp(QWidget):
         # Save clicks button requires: video panels with clicks
         has_clicks = any(panel.frame_clicks for panel in self.video_panels)
         self.saveButton.setEnabled(has_clicks)
+
+        # tracker button requires: slp file, calibration file
+        can_track = (self.labels is not None and 
+                     self.calibration_file is not None)
+        self.trackButton.setEnabled(can_track)
         
         # Navigation buttons require: loaded videos
         has_videos = len(self.video_panels) > 0
@@ -316,6 +336,22 @@ class VideoClickApp(QWidget):
             except Exception as e:
                 print(f"Error loading targets file: {str(e)}")
                 self.targets = None
+        self.update_button_states()
+
+    def load_slp_file(self):
+        """Load SLP file and store in memory."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select SLP File", "", "SLP Files (*.slp);;All Files (*)")
+        if file_path:
+            try:
+                self.labels = utils.load_slp_file(file_path)
+                print(f"SLP file loaded successfully from: {file_path}")
+                
+                # Print some basic information about the loaded data
+                print(f"Number of cameras: {len(self.labels.sessions[0].cameras)}")
+
+            except Exception as e:
+                print(f"Error loading SLP file: {str(e)}")
+                self.labels = None
         self.update_button_states()
 
     def load_clicks(self):
@@ -491,6 +527,12 @@ class VideoClickApp(QWidget):
             print(f"Error during rendering: {str(e)}")
             import traceback
             traceback.print_exc()
+
+    def track(self):
+        """Execute the tracking pipeline."""
+        print("Starting tracking process...")
+        pred_labels, state = utils.run_tracker(self.labels)
+        print("Tracking completed successfully!")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

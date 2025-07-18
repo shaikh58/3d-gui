@@ -3,6 +3,8 @@ import toml
 import pandas as pd
 import cv2
 from pathlib import Path
+import sleap_io as sio
+from sleap_3d.tracker import *
 
 def fit_plane(points):
     centroid = points.mean(axis=0)
@@ -98,6 +100,10 @@ def load_calibration_data(file_path):
         calib_data = toml.load(f)
     return calib_data
 
+def load_slp_file(file_path):
+    labels = sio.load_slp(file_path)
+    return labels
+
 def load_annotations(file_path):
     id_type_map = {
         1: "ground",
@@ -148,6 +154,18 @@ def undistort_points(distorted_points, cam_calib_data) -> np.ndarray:
     )
 
     return undistorted_points
+
+def run_tracker(labels):
+    session = labels.sessions[0]
+    options = {
+    "keypoint_aggregation_method": "mean",
+    "labels": labels,
+    "session": session
+}
+    # uses mean aggregation of keypoints across views by default
+    tracker = CrossViewTracker(**options)
+    pred_labels, state = tracker.track(0, 300)
+    return pred_labels, state
 
 def compute_global_coordinate_frame(calib_data, annotations):
     """Takes in calibration toml, and ground/origin/wall annotations
@@ -204,7 +222,7 @@ def compute_global_coordinate_frame(calib_data, annotations):
     # form orthonormal basis
     y_axis = y_axis - np.dot(y_axis, z_axis) * z_axis
     # flip axis so that it matches +ve unit axis convention
-    # y_axis = - y_axis / np.linalg.norm(y_axis)
+    y_axis = - y_axis / np.linalg.norm(y_axis)
     # Cross product to get the 3rd coordinate axis
     x_axis = np.cross(y_axis, z_axis)
     # form rotation matrix; each col is an axis of the global coordinate frame
